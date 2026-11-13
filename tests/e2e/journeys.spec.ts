@@ -254,7 +254,7 @@ test("Test 7 — data survives an application restart (new server process)", asy
 });
 
 test("audit logs record actions and the receipt chain verifies", async ({ page }) => {
-  await page.goto("/audit");
+  await page.goto("/audit?q=project.created");
   await expect(page.getByText("project.created").first()).toBeVisible();
   await page.getByRole("tab", { name: /Action proposals/ }).click();
   await expect(page.getByText(/Receipt chain intact/)).toBeVisible();
