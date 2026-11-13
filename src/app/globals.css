@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0e1014;
+  --surface: #151920;
+  --surface-2: #1b212a;
+  --border: #2a313c;
+  --text: #e7e9ee;
+  --muted: #8d95a4;
+  --accent: #6366f1;
+  --accent-fg: #ffffff;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html, body { background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 14px; line-height: 1.45; }
+* { border-color: var(--border); }
+a { color: inherit; }
+::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, select, textarea { color-scheme: dark; }
+pre, code { font-family: var(--font-mono); }
+mark.hl { background: color-mix(in srgb, var(--danger) 35%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+@media print {
+  aside, .no-print { display: none !important; }
+  html, body { background: #fff; color: #000; }
+}

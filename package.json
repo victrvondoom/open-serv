@@ -2,7 +2,7 @@
   "name": "proxy",
   "version": "1.0.0",
   "private": true,
-  "description": "PROXY — Live Supplier Intelligence & RFQ Security Platform",
+  "description": "PROXY \u2014 Live Supplier Intelligence & RFQ Security Platform",
   "engines": {
     "node": ">=22"
   },
@@ -20,7 +20,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx scripts/seed.ts",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "postinstall": "prisma generate",
+    "test:all": "npm run typecheck && npm run lint && npm test && npm run test:e2e"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
