@@ -1,0 +1,869 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────── Enums ─────────────
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+enum ProjectStatus {
+  DRAFT
+  RESEARCHING
+  RESEARCHED
+  ARCHIVED
+}
+enum JobKind {
+  FULL_RESEARCH
+  SUPPLIER_REFRESH
+}
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+enum SearchEngine {
+  GOOGLE
+  GOOGLE_MAPS
+  GOOGLE_MAPS_REVIEWS
+  GOOGLE_NEWS
+}
+enum SearchRequestStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+enum ResultKind {
+  ORGANIC
+  LOCAL
+  MAPS
+  REVIEW
+  NEWS
+}
+enum SourceType {
+  WEBSITE_PAGE
+  SEARCH_SNIPPET
+  MAPS_LISTING
+  REVIEW
+  NEWS
+  MANUAL
+  SYNTHETIC
+}
+enum ClaimType {
+  PHONE
+  EMAIL
+  ADDRESS
+  CERTIFICATION
+  PRODUCT
+  WEBSITE
+  HOURS
+  CATEGORY
+}
+enum ClaimStatus {
+  CORROBORATED
+  CONFLICTING
+  UNCORROBORATED
+  INSUFFICIENT_EVIDENCE
+  MANUALLY_CONFIRMED
+}
+enum ExtractionMethod {
+  STRUCTURED_PROVIDER
+  REGEX
+  HTML_STRUCTURED
+  LLM
+  MANUAL
+}
+enum ClaimReviewStatus {
+  UNREVIEWED
+  REVIEWED
+  INCORRECT
+}
+enum ThreatCategory {
+  DIRECT_PROMPT_INJECTION
+  INSTRUCTION_OVERRIDE
+  IGNORE_PREVIOUS
+  SECRET_ACCESS
+  EXTERNAL_COMM_REDIRECT
+  REQUIREMENT_MODIFICATION
+  MALICIOUS_TOOL_INVOCATION
+  CONTACT_SUBSTITUTION
+  OBFUSCATED_INSTRUCTION
+  MULTILINGUAL_INJECTION
+  HIDDEN_CONTENT
+}
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+enum DetectionMethod {
+  RULE
+  LLM_ASSIST
+  RULE_AND_LLM
+}
+enum FindingReviewStatus {
+  PENDING
+  REVIEWED
+  CONFIRMED
+  DISMISSED
+  FALSE_POSITIVE
+}
+enum RfqStatus {
+  DRAFT
+  APPROVED
+  SENDING
+  SENT
+  PARTIALLY_SENT
+  FAILED
+}
+enum RecipientSendStatus {
+  NOT_SENT
+  QUEUED
+  SENT
+  FAILED
+}
+enum ActionType {
+  CREATE_SUPPLIER_RECORD
+  UPDATE_SUPPLIER_NOTES
+  CREATE_COMPARISON
+  CREATE_RFQ_DRAFT
+  EXPORT_RFQ
+  SEND_RFQ_EMAIL
+  MODIFY_RFQ_RECIPIENT
+  MODIFY_PROJECT_REQUIREMENTS
+  FETCH_URL
+  ACCESS_SECRET
+  FINANCIAL_ACTION
+}
+enum PolicyDecision {
+  ALLOW
+  BLOCK
+  REQUIRE_APPROVAL
+  QUARANTINE
+}
+enum ApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+enum ExecutionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  NOT_EXECUTED
+}
+enum ActorType {
+  USER
+  AGENT
+  SYSTEM
+}
+enum Split {
+  DEV
+  HOLDOUT
+}
+enum Defense {
+  BASELINE
+  PROMPT_ONLY
+  REGEX
+  PROXY
+}
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+enum IntegrationState {
+  OK
+  ERROR
+  NOT_CONFIGURED
+  UNKNOWN
+}
+
+// ───────────── Tenancy ─────────────
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  createdAt DateTime          @default(now())
+  members   WorkspaceMember[]
+}
+
+model User {
+  id        String            @id @default(cuid())
+  email     String            @unique
+  name      String
+  createdAt DateTime          @default(now())
+  members   WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String     @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        MemberRole @default(MEMBER)
+  createdAt   DateTime   @default(now())
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+}
+
+// ───────────── Sourcing ─────────────
+model SourcingProject {
+  id                     String        @id @default(cuid())
+  workspaceId            String
+  name                   String
+  productName            String
+  description            String
+  specifications         String        @default("")
+  materialGrade          String        @default("")
+  quantity               Float?
+  unit                   String        @default("")
+  deliveryLocation       String        @default("")
+  city                   String
+  state                  String        @default("")
+  country                String        @default("India")
+  latitude               Float?
+  longitude              Float?
+  maxRadiusKm            Int           @default(100)
+  requiredCertifications String[]
+  additionalRequirements String        @default("")
+  preferredSupplierType  String        @default("")
+  excludedSuppliers      String[]
+  status                 ProjectStatus @default(DRAFT)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  jobs      ResearchJob[]
+  suppliers SupplierProject[]
+  rfqs      RFQ[]
+  comparisons SupplierComparison[]
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, status])
+}
+
+model ResearchJob {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  projectId       String
+  kind            JobKind   @default(FULL_RESEARCH)
+  supplierId      String?
+  status          JobStatus @default(QUEUED)
+  stages          Json      @default("[]")
+  stats           Json      @default("{}")
+  queue           String    @default("research.run")
+  queueJobId      String?
+  cancelRequested Boolean   @default(false)
+  attempts        Int       @default(0)
+  error           String?
+  errorDetail     Json?
+  createdAt       DateTime  @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  retryOfId       String?
+
+  project  SourcingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requests SearchRequest[]
+  documents SourceDocument[]
+
+  @@index([workspaceId, status])
+  @@index([projectId, createdAt])
+}
+
+model SearchRequest {
+  id                String              @id @default(cuid())
+  workspaceId       String
+  jobId             String?
+  engine            SearchEngine
+  query             String
+  params            Json
+  cacheKey          String
+  providerSearchId  String?
+  status            SearchRequestStatus @default(PENDING)
+  httpStatus        Int?
+  error             String?
+  resultCount       Int                 @default(0)
+  creditsUsed       Int                 @default(0)
+  cacheHit          Boolean             @default(false)
+  durationMs        Int?
+  response          Json?
+  requestedAt       DateTime            @default(now())
+  completedAt       DateTime?
+
+  job     ResearchJob?   @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  results SearchResult[]
+  documents SourceDocument[]
+
+  @@index([workspaceId, requestedAt])
+  @@index([cacheKey, status, requestedAt])
+  @@index([jobId])
+}
+
+model SearchResult {
+  id          String     @id @default(cuid())
+  workspaceId String
+  requestId   String
+  kind        ResultKind
+  position    Int
+  title       String
+  url         String?
+  domain      String?
+  snippet     String?
+  data        Json
+  dedupKey    String
+  supplierId  String?
+  createdAt   DateTime   @default(now())
+
+  request  SearchRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  supplier Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  documents SourceDocument[]
+
+  @@unique([requestId, kind, position])
+  @@index([workspaceId, dedupKey])
+  @@index([supplierId])
+}
+
+// ───────────── Suppliers ─────────────
+model Supplier {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  normalizedName   String
+  identityKey      String
+  category         String?
+  website          String?
+  domain           String?
+  address          String?
+  city             String?
+  state            String?
+  country          String?
+  latitude         Float?
+  longitude        Float?
+  phone            String?
+  email            String?
+  rating           Float?
+  reviewCount      Int?
+  mapsPlaceId      String?
+  mapsDataId       String?
+  hours            Json?
+  description      String?
+  mapsInfo         Json?
+  reviewsSummary   Json?
+  aiSummary        Json?
+  consistency      Json?
+  tags             String[]
+  notes            String   @default("")
+  manualOverrides  Json     @default("{}")
+  isSynthetic      Boolean  @default(false)
+  lastResearchedAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  projects       SupplierProject[]
+  products       SupplierProduct[]
+  contacts       SupplierContact[]
+  certifications SupplierCertification[]
+  documents      SourceDocument[]
+  claims         ExtractedClaim[]
+  findings       SecurityFinding[]
+  results        SearchResult[]
+  rfqRecipients  RFQRecipient[]
+
+  @@unique([workspaceId, identityKey])
+  @@index([workspaceId, normalizedName])
+  @@index([workspaceId, domain])
+  @@index([workspaceId, mapsPlaceId])
+  @@index([workspaceId, lastResearchedAt])
+}
+
+model SupplierProject {
+  id          String   @id @default(cuid())
+  supplierId  String
+  projectId   String
+  matchScore  Float?
+  distanceKm  Float?
+  relevance   Json?
+  savedAt     DateTime @default(now())
+  supplier    Supplier        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  project     SourcingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, projectId])
+  @@index([projectId, matchScore])
+}
+
+model SupplierProduct {
+  id             String   @id @default(cuid())
+  supplierId     String
+  name           String
+  normalizedName String
+  description    String?
+  claimId        String?
+  createdAt      DateTime @default(now())
+  supplier       Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, normalizedName])
+}
+
+model SupplierContact {
+  id              String      @id @default(cuid())
+  supplierId      String
+  type            ClaimType
+  value           String
+  normalizedValue String
+  status          ClaimStatus @default(UNCORROBORATED)
+  confirmedAt     DateTime?
+  confirmedBy     String?
+  isPrimary       Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  supplier        Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  recipients      RFQRecipient[]
+
+  @@unique([supplierId, type, normalizedValue])
+}
+
+model SupplierCertification {
+  id             String      @id @default(cuid())
+  supplierId     String
+  name           String
+  normalizedName String
+  status         ClaimStatus @default(UNCORROBORATED)
+  createdAt      DateTime    @default(now())
+  supplier       Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, normalizedName])
+}
+
+// ───────────── Evidence ─────────────
+model SourceDocument {
+  id               String     @id @default(cuid())
+  workspaceId      String
+  supplierId       String?
+  jobId            String?
+  searchRequestId  String?
+  searchResultId   String?
+  url              String
+  finalUrl         String?
+  domain           String?
+  sourceType       SourceType
+  provider         String
+  providerSearchId String?
+  title            String?
+  httpStatus       Int?
+  contentType      String?
+  text             String     @db.Text
+  hiddenText       String?    @db.Text
+  structured       Json?
+  contentHash      String
+  byteLength       Int        @default(0)
+  fetchError       String?
+  isSynthetic      Boolean    @default(false)
+  retrievedAt      DateTime   @default(now())
+
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  job           ResearchJob?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  searchRequest SearchRequest?  @relation(fields: [searchRequestId], references: [id], onDelete: SetNull)
+  searchResult  SearchResult?   @relation(fields: [searchResultId], references: [id], onDelete: SetNull)
+  passages      EvidencePassage[]
+  claimEvidence ClaimEvidence[]
+  findings      SecurityFinding[]
+
+  @@unique([workspaceId, url, contentHash])
+  @@index([supplierId, retrievedAt])
+  @@index([workspaceId, sourceType])
+}
+
+model EvidencePassage {
+  id          String   @id @default(cuid())
+  documentId  String
+  ordinal     Int
+  text        String   @db.Text
+  startOffset Int
+  endOffset   Int
+  hidden      Boolean  @default(false)
+  hash        String
+  createdAt   DateTime @default(now())
+
+  document SourceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  evidence ClaimEvidence[]
+  findings SecurityFinding[]
+
+  @@unique([documentId, ordinal])
+  @@index([hash])
+}
+
+model ExtractedClaim {
+  id              String            @id @default(cuid())
+  workspaceId     String
+  supplierId      String
+  claimType       ClaimType
+  value           String
+  normalizedValue String
+  status          ClaimStatus       @default(UNCORROBORATED)
+  statusReason    String?
+  confidence      Float             @default(0.5)
+  extractionMethod ExtractionMethod
+  reviewStatus    ClaimReviewStatus @default(UNREVIEWED)
+  reviewerNote    String?
+  reviewedAt      DateTime?
+  limitations     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  supplier Supplier        @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  evidence ClaimEvidence[]
+
+  @@unique([supplierId, claimType, normalizedValue])
+  @@index([workspaceId, claimType])
+  @@index([supplierId, status])
+}
+
+model ClaimEvidence {
+  id               String           @id @default(cuid())
+  claimId          String
+  documentId       String
+  passageId        String
+  extractionMethod ExtractionMethod
+  quote            String
+  createdAt        DateTime         @default(now())
+
+  claim    ExtractedClaim  @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  document SourceDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  passage  EvidencePassage @relation(fields: [passageId], references: [id], onDelete: Cascade)
+
+  @@unique([claimId, passageId])
+  @@index([documentId])
+}
+
+// ───────────── Security ─────────────
+model SecurityFinding {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  supplierId      String?
+  documentId      String
+  passageId       String
+  category        ThreatCategory
+  severity        Severity
+  detectionMethod DetectionMethod     @default(RULE)
+  ruleId          String
+  matchedText     String
+  excerpt         String
+  startOffset     Int
+  endOffset       Int
+  variant         String              @default("plain")
+  confidence      Float
+  explanation     String
+  recommendation  String
+  reviewStatus    FindingReviewStatus @default(PENDING)
+  isSynthetic     Boolean             @default(false)
+  actionProposalId String?
+  createdAt       DateTime            @default(now())
+
+  supplier Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  document SourceDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  passage  EvidencePassage  @relation(fields: [passageId], references: [id], onDelete: Cascade)
+  reviews  SecurityReview[]
+  proposal ActionProposal?  @relation(fields: [actionProposalId], references: [id], onDelete: SetNull)
+
+  @@unique([passageId, ruleId, startOffset, variant])
+  @@index([workspaceId, reviewStatus, severity])
+  @@index([supplierId])
+}
+
+model SecurityReview {
+  id        String              @id @default(cuid())
+  findingId String
+  userId    String
+  decision  FindingReviewStatus
+  note      String?
+  createdAt DateTime            @default(now())
+  finding   SecurityFinding     @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId, createdAt])
+}
+
+// ───────────── Comparison ─────────────
+model SupplierComparison {
+  id          String   @id @default(cuid())
+  workspaceId String
+  projectId   String?
+  name        String
+  supplierIds String[]
+  result      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     SourcingProject?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  weights     ComparisonWeight[]
+
+  @@index([workspaceId, createdAt])
+}
+
+model ComparisonWeight {
+  id           String             @id @default(cuid())
+  comparisonId String
+  component    String
+  weight       Float
+  comparison   SupplierComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+
+  @@unique([comparisonId, component])
+}
+
+// ───────────── RFQ ─────────────
+model RFQ {
+  id          String    @id @default(cuid())
+  workspaceId String
+  projectId   String
+  subject     String
+  body        String    @db.Text
+  status      RfqStatus @default(DRAFT)
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project    SourcingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  recipients RFQRecipient[]
+  approvals  RFQApproval[]
+
+  @@index([workspaceId, status])
+}
+
+model RFQRecipient {
+  id                String              @id @default(cuid())
+  rfqId             String
+  supplierId        String
+  contactId         String?
+  email             String
+  verification      Json?
+  manualConfirmed   Boolean             @default(false)
+  sendStatus        RecipientSendStatus @default(NOT_SENT)
+  providerMessageId String?
+  providerResponse  Json?
+  error             String?
+  attempts          Int                 @default(0)
+  sentAt            DateTime?
+  createdAt         DateTime            @default(now())
+
+  rfq      RFQ              @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  supplier Supplier         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  contact  SupplierContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([rfqId, email])
+  @@index([supplierId])
+}
+
+model RFQApproval {
+  id          String   @id @default(cuid())
+  rfqId       String
+  userId      String
+  contentHash String
+  recipients  Json
+  note        String?
+  approvedAt  DateTime @default(now())
+  rfq         RFQ      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId, approvedAt])
+}
+
+// ───────────── Action security ─────────────
+model ActionProposal {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  actorType       ActorType
+  actorId         String
+  actionType      ActionType
+  params          Json
+  sourceRefs      Json           @default("[]")
+  decision        PolicyDecision
+  decisionReasons Json           @default("[]")
+  approvalStatus  ApprovalStatus @default(NOT_REQUIRED)
+  approvedBy      String?
+  approvedAt      DateTime?
+  rfqId           String?
+  simulated       Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+
+  executions ActionExecution[]
+  receipts   ActionReceipt[]
+  findings   SecurityFinding[]
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, decision])
+}
+
+model ActionExecution {
+  id         String          @id @default(cuid())
+  proposalId String
+  status     ExecutionStatus @default(PENDING)
+  result     Json?
+  error      String?
+  startedAt  DateTime        @default(now())
+  finishedAt DateTime?
+  proposal   ActionProposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  receipts   ActionReceipt[]
+
+  @@index([proposalId])
+}
+
+model ActionReceipt {
+  id          String          @id @default(cuid())
+  workspaceId String
+  proposalId  String
+  executionId String?
+  seq         Int
+  prevHash    String
+  receiptHash String
+  payload     Json
+  createdAt   DateTime        @default(now())
+  proposal    ActionProposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  execution   ActionExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, seq])
+  @@index([proposalId])
+}
+
+// ───────────── Benchmarks ─────────────
+model BenchmarkSuite {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String   @default("")
+  version     String   @default("1")
+  isSynthetic Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  scenarios BenchmarkScenario[]
+  runs      BenchmarkRun[]
+
+  @@unique([workspaceId, name])
+}
+
+model BenchmarkScenario {
+  id                    String         @id @default(cuid())
+  suiteId               String
+  key                   String
+  name                  String
+  attackCategory        String
+  language              String         @default("en")
+  deliveryChannel       String
+  sourceContent         String         @db.Text
+  userTask              String
+  context               Json           @default("{}")
+  expectedPolicyOutcome PolicyDecision
+  expectedSafeOutcome   String
+  severity              Severity       @default(MEDIUM)
+  split                 Split          @default(DEV)
+  tags                  String[]
+  isSynthetic           Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  suite   BenchmarkSuite    @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  results BenchmarkResult[]
+
+  @@unique([suiteId, key])
+}
+
+model BenchmarkRun {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  suiteId        String
+  name           String
+  status         RunStatus @default(QUEUED)
+  split          Split?
+  datasetVersion String
+  config         Json
+  metrics        Json?
+  scenarioCount  Int       @default(0)
+  error          String?
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  suite   BenchmarkSuite    @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  results BenchmarkResult[]
+
+  @@index([workspaceId, createdAt])
+}
+
+model BenchmarkResult {
+  id                         String   @id @default(cuid())
+  runId                      String
+  scenarioId                 String
+  defense                    Defense
+  isAttack                   Boolean
+  detected                   Boolean  @default(false)
+  attackSucceeded            Boolean  @default(false)
+  unauthorizedActionExecuted Boolean  @default(false)
+  secretExfilAttempted       Boolean  @default(false)
+  secretExfilBlocked         Boolean  @default(false)
+  taskCompleted              Boolean  @default(false)
+  policyOutcome              PolicyDecision?
+  actionsProposed            Int      @default(0)
+  actionsWithProvenance      Int      @default(0)
+  actionsWithReceipt         Int      @default(0)
+  latencyMs                  Float    @default(0)
+  searchRequests             Int      @default(0)
+  inputTokens                Int?
+  outputTokens               Int?
+  costUsd                    Float?
+  trace                      Json
+  error                      String?
+  createdAt                  DateTime @default(now())
+
+  run      BenchmarkRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  scenario BenchmarkScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, scenarioId, defense])
+  @@index([scenarioId])
+}
+
+// ───────────── Platform ─────────────
+model AuditEvent {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actorType   ActorType
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model IntegrationStatus {
+  id               String           @id @default(cuid())
+  workspaceId      String
+  provider         String
+  status           IntegrationState @default(UNKNOWN)
+  message          String?
+  details          Json?
+  creditsRemaining Int?
+  checkedAt        DateTime         @default(now())
+
+  @@unique([workspaceId, provider])
+}
+
+model RateLimitBucket {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+}
