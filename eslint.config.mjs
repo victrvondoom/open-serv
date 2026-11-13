@@ -2,7 +2,7 @@ import next from "eslint-config-next";
 
 const config = [
   ...next,
-  { ignores: [".next/**", "src/generated/**", "node_modules/**", "playwright-report/**", "test-results/**"] },
+  { ignores: [".next/**", ".next-*/**", "src/generated/**", "node_modules/**", "playwright-report/**", "test-results/**"] },
   {
     rules: {
       "react-hooks/set-state-in-effect": "off",
